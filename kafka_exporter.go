@@ -36,6 +36,7 @@ var (
 	topicUnderReplicatedPartition *prometheus.Desc
 	consumergroupCurrentOffsetSum *prometheus.Desc
 	consumergroupLagSum           *prometheus.Desc
+	consumergroupLag              *prometheus.Desc
 	consumergroupMembers          *prometheus.Desc
 )
 
@@ -214,6 +215,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- topicPartitions
 	ch <- topicUnderReplicatedPartition
 	ch <- consumergroupCurrentOffsetSum
+	ch <- consumergroupLag
 	ch <- consumergroupLagSum
 }
 
@@ -374,7 +376,9 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 									lag = offset - offsetFetchResponseBlock.Offset
 									lagSum += lag
 								}
-
+								ch <- prometheus.MustNewConstMetric(
+									consumergroupLag, prometheus.GaugeValue, float64(lag), group.GroupId, topic, strconv.FormatInt(int64(partition), 10),
+								)
 							} else {
 								plog.Errorf("No offset of topic %s partition %d, cannot get consumer group lag", topic, partition)
 							}
@@ -481,6 +485,12 @@ func main() {
 		prometheus.BuildFQName(namespace, "consumergroup", "current_offset_sum"),
 		"Current Offset of a ConsumerGroup at Topic for all partitions",
 		[]string{"consumergroup", "topic"}, labels,
+	)
+
+	consumergroupLag = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "consumergroup", "lag"),
+		"Current Approximate Lag of a ConsumerGroup at Topic/Partition",
+		[]string{"consumergroup", "topic", "partition"}, labels,
 	)
 
 	consumergroupLagSum = prometheus.NewDesc(
