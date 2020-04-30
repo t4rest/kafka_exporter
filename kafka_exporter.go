@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	kazoo "github.com/krallistic/kazoo-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	plog "github.com/prometheus/common/log"
@@ -47,8 +46,6 @@ type Exporter struct {
 	topicFilter             *regexp.Regexp
 	groupFilter             *regexp.Regexp
 	mu                      sync.Mutex
-	useZooKeeperLag         bool
-	zookeeperClient         *kazoo.Kazoo
 	nextMetadataRefresh     time.Time
 	metadataRefreshInterval time.Duration
 }
@@ -66,8 +63,6 @@ type kafkaOpts struct {
 	tlsKeyFile               string
 	tlsInsecureSkipTLSVerify bool
 	kafkaVersion             string
-	useZooKeeperLag          bool
-	uriZookeeper             []string
 	labels                   string
 	metadataRefreshInterval  string
 }
@@ -108,7 +103,6 @@ func canReadFile(path string) bool {
 
 // NewExporter returns an initialized Exporter.
 func NewExporter(opts kafkaOpts, topicFilter string, groupFilter string) (*Exporter, error) {
-	var zookeeperClient *kazoo.Kazoo
 	config := sarama.NewConfig()
 	config.ClientID = clientID
 	kafkaVersion, err := sarama.ParseKafkaVersion(opts.kafkaVersion)
@@ -175,10 +169,6 @@ func NewExporter(opts kafkaOpts, topicFilter string, groupFilter string) (*Expor
 		}
 	}
 
-	if opts.useZooKeeperLag {
-		zookeeperClient, err = kazoo.NewKazoo(opts.uriZookeeper, nil)
-	}
-
 	interval, err := time.ParseDuration(opts.metadataRefreshInterval)
 	if err != nil {
 		plog.Errorln("Cannot parse metadata refresh interval")
@@ -200,8 +190,6 @@ func NewExporter(opts kafkaOpts, topicFilter string, groupFilter string) (*Expor
 		client:                  client,
 		topicFilter:             regexp.MustCompile(topicFilter),
 		groupFilter:             regexp.MustCompile(groupFilter),
-		useZooKeeperLag:         opts.useZooKeeperLag,
-		zookeeperClient:         zookeeperClient,
 		nextMetadataRefresh:     time.Now(),
 		metadataRefreshInterval: interval,
 	}, nil
